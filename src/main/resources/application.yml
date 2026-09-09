@@ -42,6 +42,8 @@ spring:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
       acks: all
       retries: 3
       properties:
@@ -49,6 +51,8 @@ spring:
         max.in.flight.requests.per.connection: 5
         delivery.timeout.ms: 30000
     consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       group-id: ${KAFKA_CONSUMER_GROUP:payauth-events}
       auto-offset-reset: earliest
       enable-auto-commit: false
