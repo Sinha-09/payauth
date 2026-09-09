@@ -93,8 +93,13 @@ payauth:
     topic: authorization-events
   velocity:
     enabled: true
-    rules-file: classpath:rules.yml
+    # Point this at a file: location to tune thresholds without a deploy.
+    rules-file: ${VELOCITY_RULES_FILE:classpath:rules.yml}
     refresh-interval: 10s
+    redis-timeout: 200ms
+  issuer:
+    # Stand-in for a real issuer authorization. Amounts above this get ISO 8583 51.
+    decline-above-minor: ${ISSUER_DECLINE_ABOVE_MINOR:10000000}
 
 logging:
   level:

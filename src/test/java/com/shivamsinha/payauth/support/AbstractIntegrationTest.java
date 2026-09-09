@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -40,6 +41,9 @@ public abstract class AbstractIntegrationTest {
     @Autowired
     private EntityManager entityManager;
 
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
     @DynamicPropertySource
     static void registerProperties(DynamicPropertyRegistry registry) {
         IntegrationTestContainers.startAll();
@@ -53,10 +57,23 @@ public abstract class AbstractIntegrationTest {
     }
 
     @BeforeEach
-    void resetDatabase() {
-        transactionTemplate.executeWithoutResult(status -> {
-            entityManager.createNativeQuery("TRUNCATE TABLE card_authorization, idempotency_key, outbox").executeUpdate();
-        });
+    void resetState() {
+        transactionTemplate.executeWithoutResult(status ->
+                entityManager.createNativeQuery("TRUNCATE TABLE card_authorization, idempotency_key, outbox")
+                        .executeUpdate());
+
+        // Velocity counters live in Redis and would otherwise leak between tests: a
+        // card that tripped a limit in one test would start the next one already
+        // over it.
+        try {
+            redisTemplate.execute((org.springframework.data.redis.core.RedisCallback<Object>) connection -> {
+                connection.serverCommands().flushDb();
+                return null;
+            });
+        } catch (RuntimeException ex) {
+            // Tests that deliberately run without Redis reach this; they assert
+            // fail-open behaviour and do not care about its state.
+        }
     }
 
     protected String url(String path) {

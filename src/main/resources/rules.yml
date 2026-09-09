@@ -1,0 +1,33 @@
+# Velocity and anomaly rules.
+#
+# Re-read on the interval set by payauth.velocity.refresh-interval, so thresholds
+# can be tightened during an attack without a deploy. Point
+# payauth.velocity.rules-file at a file: location for that to be useful in
+# production; the classpath copy below is the shipped default.
+#
+# A malformed or partial file is ignored: the last good configuration stays in
+# force. The fraud layer failing open is a business decision, but the fraud layer
+# failing *closed* because of a YAML typo is not one anybody made on purpose.
+
+card-velocity:
+  enabled: true
+  # More than this many authorizations on one card inside the window is abuse.
+  max-authorizations: 5
+  window-seconds: 60
+  verdict: DECLINE
+
+amount-anomaly:
+  enabled: true
+  # Fires when the amount exceeds multiplier x the card's rolling average.
+  multiplier: 5.0
+  # Below this many past authorizations the average is noise, so the rule abstains.
+  min-history: 5
+  sample-size: 20
+  # REVIEW, not DECLINE: a large purchase is unusual, not proof of fraud.
+  verdict: REVIEW
+
+impossible-travel:
+  enabled: true
+  window-seconds: 600
+  min-distance-km: 500
+  verdict: DECLINE
