@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # The integration tests start Postgres, Redis and Kafka through
+      # Testcontainers. GitHub's ubuntu runners already expose a Docker socket, so
+      # there is nothing to install; this just fails early with a clear message if
+      # that ever stops being true.
+      - name: Verify Docker is available
+        run: docker info
+
+      - name: Build and test
+        run: ./mvnw -B verify
+
+      - name: Publish test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the runtime image
+        run: docker build -t payauth:ci .
+
+      - name: Start the full stack and check it answers
+        run: |
+          docker compose up -d --build
+          for i in $(seq 1 90); do
+            if curl -sf http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
+              echo "service is up"
+              break
+            fi
+            sleep 2
+          done
+          curl -sf http://localhost:8080/actuator/health | grep -q '"status":"UP"'
+
+      - name: Idempotency smoke test
+        run: |
+          KEY="ci-$(date +%s)"
+          BODY='{"cardToken":"tok_4111111111111111","amountMinor":249900,"currency":"INR","merchantId":"mrc_acme","countryCode":"IN"}'
+          first=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8080/v1/authorizations \
+            -H 'Content-Type: application/json' -H "Idempotency-Key: $KEY" -d "$BODY")
+          second=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8080/v1/authorizations \
+            -H 'Content-Type: application/json' -H "Idempotency-Key: $KEY" -d "$BODY")
+          echo "first=$first second=$second"
+          test "$first" = "201"
+          test "$second" = "200"
+
+      - name: Application logs on failure
+        if: failure()
+        run: docker compose logs app
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
