@@ -1,0 +1,94 @@
+spring:
+  application:
+    name: payauth
+
+  datasource:
+    url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/payauth}
+    username: ${POSTGRES_USER:payauth}
+    password: ${POSTGRES_PASSWORD:payauth}
+    hikari:
+      pool-name: payauth-pool
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      # Authorizations are short transactions. If we cannot get a connection in two
+      # seconds the system is already in trouble and failing fast beats queueing.
+      connection-timeout: 2000
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Never 'update'. The schema is owned by Flyway; Hibernate only checks that
+      # the mapping and the migrated schema agree, and refuses to start if not.
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        order_inserts: true
+        order_updates: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 200ms
+      connect-timeout: 200ms
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        delivery.timeout.ms: 30000
+    consumer:
+      group-id: ${KAFKA_CONSUMER_GROUP:payauth-events}
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+    listener:
+      ack-mode: record
+
+server:
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: payauth
+
+payauth:
+  idempotency:
+    # How long a completed key can be replayed for. 24h matches what card networks
+    # and most PSPs use for retry windows.
+    ttl: 24h
+  outbox:
+    relay:
+      enabled: true
+      fixed-delay: 500ms
+      batch-size: 100
+    topic: authorization-events
+  velocity:
+    enabled: true
+    rules-file: classpath:rules.yml
+    refresh-interval: 10s
+
+logging:
+  level:
+    com.shivamsinha.payauth: INFO
