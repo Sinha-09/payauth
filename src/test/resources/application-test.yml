@@ -1,0 +1,9 @@
+spring:
+  kafka:
+    listener:
+      auto-startup: false
+logging:
+  level:
+    org.testcontainers: WARN
+    com.github.dockerjava: WARN
+    org.apache.kafka: WARN

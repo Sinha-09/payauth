@@ -6,47 +6,50 @@ import com.shivamsinha.payauth.api.dto.AuthorizationResponse;
 import com.shivamsinha.payauth.api.exception.AuthorizationNotFoundException;
 import com.shivamsinha.payauth.api.exception.InvalidStateTransitionException;
 import com.shivamsinha.payauth.domain.Authorization;
-import com.shivamsinha.payauth.domain.AuthorizationStatus;
-import com.shivamsinha.payauth.domain.ResponseCode;
 import com.shivamsinha.payauth.repository.AuthorizationRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Clock;
 import java.util.UUID;
 
-/**
- * PHASE 1 STUB.
- *
- * <p>Approves everything, with no idempotency and no event publication. The
- * Idempotency-Key is accepted and ignored so the API surface is already final;
- * phase 2 puts the real ledger behind it without changing the controller.
- */
 @Service
 public class AuthorizationService {
 
     private final AuthorizationRepository authorizationRepository;
-    private final Clock clock;
+    private final AuthorizationProcessor processor;
+    private final IdempotencyService idempotencyService;
+    private final CanonicalRequestHasher hasher;
 
-    public AuthorizationService(AuthorizationRepository authorizationRepository, Clock clock) {
+    public AuthorizationService(AuthorizationRepository authorizationRepository,
+                                AuthorizationProcessor processor,
+                                IdempotencyService idempotencyService,
+                                CanonicalRequestHasher hasher) {
         this.authorizationRepository = authorizationRepository;
-        this.clock = clock;
+        this.processor = processor;
+        this.idempotencyService = idempotencyService;
+        this.hasher = hasher;
     }
 
-    @Transactional
+    /**
+     * Deliberately not {@code @Transactional}.
+     *
+     * <p>An outer transaction here would swallow the ledger's REQUIRES_NEW
+     * boundaries into one long-lived unit of work, which is precisely the design we
+     * are avoiding: the claim has to be committed and visible before the
+     * authorization is attempted.
+     */
     public AuthorizationOutcome authorize(AuthorizationRequest request, String idempotencyKey) {
-        Authorization authorization = new Authorization(
-                UUID.randomUUID(),
-                request.cardToken(),
-                request.amountMinor(),
-                request.currency(),
-                request.merchantId(),
-                AuthorizationStatus.APPROVED,
-                ResponseCode.APPROVED,
-                clock.instant());
+        String requestHash = hasher.hash(request);
 
-        authorizationRepository.save(authorization);
-        return AuthorizationOutcome.created(AuthorizationResponse.from(authorization));
+        IdempotencyOutcome<AuthorizationResponse> outcome = idempotencyService.executeIdempotent(
+                idempotencyKey,
+                requestHash,
+                AuthorizationResponse.class,
+                () -> processor.process(request));
+
+        return outcome.replayed()
+                ? AuthorizationOutcome.replayed(outcome.value())
+                : AuthorizationOutcome.created(outcome.value());
     }
 
     @Transactional(readOnly = true)
@@ -63,8 +66,8 @@ public class AuthorizationService {
             throw new InvalidStateTransitionException(ex.getMessage());
         }
         // No explicit save: the entity is managed, and the flush at commit is what
-        // triggers the @Version check. If that check fails Spring translates it into
-        // an OptimisticLockingFailureException, which the handler renders as 409.
+        // triggers the @Version check. A stale version becomes an
+        // OptimisticLockingFailureException, which the handler renders as 409.
         return AuthorizationResponse.from(authorization);
     }
 

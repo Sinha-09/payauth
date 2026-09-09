@@ -78,6 +78,9 @@ payauth:
     # How long a completed key can be replayed for. 24h matches what card networks
     # and most PSPs use for retry windows.
     ttl: 24h
+    # A claim older than this is assumed abandoned and may be taken over. Must be
+    # comfortably longer than the slowest legitimate authorization.
+    in-progress-timeout: 30s
   outbox:
     relay:
       enabled: true

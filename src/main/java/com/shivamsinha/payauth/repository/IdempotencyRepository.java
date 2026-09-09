@@ -43,6 +43,29 @@ public interface IdempotencyRepository extends JpaRepository<IdempotencyRecord, 
                  @Param("expiresAt") Instant expiresAt);
 
     /**
+     * Reclaim a key whose owner died mid-flight.
+     *
+     * <p>Guarded on {@code status = 'IN_PROGRESS'} and {@code created_at < staleBefore}
+     * so it can never steal a key from a live caller, and never resurrect a
+     * COMPLETED key.
+     */
+    @Modifying
+    @Query(value = """
+            UPDATE idempotency_key
+               SET request_hash = :requestHash,
+                   created_at   = :now,
+                   expires_at   = :expiresAt
+             WHERE key = :key
+               AND status = 'IN_PROGRESS'
+               AND created_at < :staleBefore
+            """, nativeQuery = true)
+    int takeOverStale(@Param("key") String key,
+                      @Param("requestHash") String requestHash,
+                      @Param("staleBefore") Instant staleBefore,
+                      @Param("now") Instant now,
+                      @Param("expiresAt") Instant expiresAt);
+
+    /**
      * Store the final response and flip the record to COMPLETED.
      *
      * <p>Written as a native statement so the JSONB cast is explicit and so the
