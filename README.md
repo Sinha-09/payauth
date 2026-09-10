@@ -2,7 +2,7 @@
 
 An idempotent card authorization service with a real-time velocity and fraud rules layer, built on Java 21, Spring Boot, PostgreSQL, Kafka and Redis.
 
-[![CI](https://github.com/SHIVAM-SINHA-5359/payauth/actions/workflows/ci.yml/badge.svg)](https://github.com/SHIVAM-SINHA-5359/payauth/actions/workflows/ci.yml)
+[![CI](https://github.com/Sinha-09/payauth/actions/workflows/ci.yml/badge.svg)](https://github.com/Sinha-09/payauth/actions/workflows/ci.yml)
 
 ---
 
