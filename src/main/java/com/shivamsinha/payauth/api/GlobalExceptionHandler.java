@@ -9,9 +9,15 @@ import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -21,6 +27,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -113,6 +120,71 @@ public class GlobalExceptionHandler {
                 request);
     }
 
+    /**
+     * An unmapped path. Spring raises this for anything the dispatcher cannot route,
+     * including {@code /} and {@code /favicon.ico}.
+     *
+     * <p>It needs an explicit handler for two reasons. It is a 404, not a 500 — the
+     * request was fine, the path simply does not exist. And it must not be logged at
+     * ERROR with a stack trace: unmapped paths are what every bot, scanner and
+     * browser favicon request produces, and routing that noise to the same place as
+     * genuine internal faults is how an on-call rotation learns to ignore its alerts.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ProblemDetail handleNoResource(NoResourceFoundException ex, HttpServletRequest request) {
+        log.debug("No handler for {} {}", request.getMethod(), request.getRequestURI());
+        return problem(
+                HttpStatus.NOT_FOUND,
+                "no-such-endpoint",
+                "Endpoint not found",
+                "No endpoint is mapped to " + request.getMethod() + " " + request.getRequestURI() + ".",
+                request);
+    }
+
+    /**
+     * The path exists but not for this verb. 405 must carry an {@code Allow} header,
+     * which is why this returns a ResponseEntity rather than a bare ProblemDetail.
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ProblemDetail> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex,
+                                                                  HttpServletRequest request) {
+        ProblemDetail problem = problem(
+                HttpStatus.METHOD_NOT_ALLOWED,
+                "method-not-allowed",
+                "Method not allowed",
+                ex.getMethod() + " is not supported by " + request.getRequestURI() + ".",
+                request);
+
+        Set<HttpMethod> allowed = ex.getSupportedHttpMethods() == null ? Set.of() : ex.getSupportedHttpMethods();
+        problem.setProperty("supportedMethods", allowed.stream().map(HttpMethod::name).sorted().toList());
+
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .allow(allowed.toArray(HttpMethod[]::new))
+                .body(problem);
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ProblemDetail handleUnsupportedMediaType(HttpMediaTypeNotSupportedException ex,
+                                                    HttpServletRequest request) {
+        return problem(
+                HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                "unsupported-media-type",
+                "Unsupported media type",
+                "This endpoint consumes application/json.",
+                request);
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+    public ProblemDetail handleNotAcceptable(HttpMediaTypeNotAcceptableException ex,
+                                             HttpServletRequest request) {
+        return problem(
+                HttpStatus.NOT_ACCEPTABLE,
+                "not-acceptable",
+                "Not acceptable",
+                "This endpoint produces application/json.",
+                request);
+    }
+
     @ExceptionHandler(AuthorizationNotFoundException.class)
     public ProblemDetail handleNotFound(AuthorizationNotFoundException ex,
                                         HttpServletRequest request) {
@@ -170,6 +242,12 @@ public class GlobalExceptionHandler {
                 request);
     }
 
+    /**
+     * The catch-all. Everything reaching here is, by definition, a fault we did not
+     * anticipate, so it is logged at ERROR with a stack trace and someone should look
+     * at it. Keeping routine 404s and 405s out of this method is what makes that
+     * statement true and the ERROR log worth reading.
+     */
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleUnexpected(Exception ex, HttpServletRequest request) {
         // Deliberately opaque to the caller: an internal failure must not leak stack
