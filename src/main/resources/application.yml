@@ -97,6 +97,10 @@ payauth:
     rules-file: ${VELOCITY_RULES_FILE:classpath:rules.yml}
     refresh-interval: 10s
     redis-timeout: 200ms
+  console:
+    # Read-only demo UI at /. Turn this off anywhere real: it exposes raw
+    # authorization rows and per-card velocity state with no authentication.
+    enabled: ${CONSOLE_ENABLED:true}
   issuer:
     # Stand-in for a real issuer authorization. Amounts above this get ISO 8583 51.
     decline-above-minor: ${ISSUER_DECLINE_ABOVE_MINOR:10000000}

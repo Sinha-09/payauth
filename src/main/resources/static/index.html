@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>payauth console</title>
+<style>
+  :root {
+    --bg: #0f1216; --panel: #161b22; --panel-2: #1c2129; --line: #2a313b;
+    --text: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --ok: #3fb950; --warn: #d29922; --bad: #f85149; --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--line); display: flex;
+           align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 17px; letter-spacing: -0.2px; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  header .health { margin-left: auto; font-family: var(--mono); font-size: 12px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  .wrap { display: grid; grid-template-columns: 380px 1fr; gap: 16px; padding: 16px 24px 40px; align-items: start; }
+  @media (max-width: 1100px) { .wrap { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 16px; }
+  .panel h2 { margin: 0; padding: 12px 14px; font-size: 12px; text-transform: uppercase;
+              letter-spacing: 0.6px; color: var(--muted); border-bottom: 1px solid var(--line); font-weight: 600; }
+  .panel .body { padding: 14px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+  input, select { width: 100%; padding: 7px 9px; background: var(--panel-2); color: var(--text);
+                  border: 1px solid var(--line); border-radius: 6px; font-family: var(--mono); font-size: 13px; }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  button { padding: 8px 12px; border-radius: 6px; border: 1px solid var(--line);
+           background: var(--panel-2); color: var(--text); cursor: pointer; font-size: 13px; font-weight: 500; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: #1f6feb; border-color: #1f6feb; }
+  button.primary:hover { background: #2b7cf3; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btns { display: flex; flex-direction: column; gap: 7px; margin-top: 14px; }
+  .hint { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  pre { margin: 0; padding: 12px; background: #0b0e12; border: 1px solid var(--line);
+        border-radius: 6px; font-family: var(--mono); font-size: 12px; overflow-x: auto; white-space: pre-wrap;
+        word-break: break-word; }
+  table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12px; }
+  th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 8px;
+       border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--panel); }
+  td { padding: 5px 8px; border-bottom: 1px solid #20262e; }
+  tr:last-child td { border-bottom: none; }
+  .scroll { max-height: 260px; overflow-y: auto; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .b-ok { background: rgba(63,185,80,.15); color: var(--ok); }
+  .b-bad { background: rgba(248,81,73,.15); color: var(--bad); }
+  .b-warn { background: rgba(210,153,34,.15); color: var(--warn); }
+  .b-info { background: rgba(88,166,255,.15); color: var(--accent); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+  .stat { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; }
+  .stat .k { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
+  .stat .v { font-size: 19px; font-family: var(--mono); margin-top: 2px; }
+  .explain { padding: 11px 13px; border-radius: 6px; font-size: 13px; margin-bottom: 12px;
+             border-left: 3px solid var(--accent); background: rgba(88,166,255,.07); }
+  .explain.ok { border-color: var(--ok); background: rgba(63,185,80,.07); }
+  .explain.bad { border-color: var(--bad); background: rgba(248,81,73,.07); }
+  .explain.warn { border-color: var(--warn); background: rgba(210,153,34,.07); }
+  .explain b { display: block; margin-bottom: 3px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 780px) { .cols { grid-template-columns: 1fr; } }
+  .kv { font-family: var(--mono); font-size: 12px; }
+  .kv div { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #20262e; }
+  .kv span:first-child { color: var(--muted); }
+  .muted { color: var(--muted); }
+  .tabs { display: flex; gap: 4px; padding: 8px 14px 0; }
+  .tabs button { border-radius: 6px 6px 0 0; border-bottom: none; font-size: 12px; padding: 6px 12px; }
+  .tabs button.active { background: var(--panel); border-color: var(--line); color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>payauth</h1>
+  <span class="sub">idempotent card authorization &middot; demo console</span>
+  <span class="health" id="health"><span class="dot" style="background:#8b949e"></span>checking…</span>
+</header>
+
+<div class="wrap">
+
+  <!-- ============ LEFT: the request ============ -->
+  <div>
+    <div class="panel">
+      <h2>Authorize a payment</h2>
+      <div class="body">
+        <label>Card token</label>
+        <div class="row">
+          <input id="cardToken" value="tok_4111111111111111">
+          <button style="flex:0 0 auto" onclick="newCard()" title="Use a fresh card">new</button>
+        </div>
+        <div class="hint">Reuse one card to trip the velocity rules.</div>
+
+        <label>Amount (minor units &mdash; paise)</label>
+        <input id="amountMinor" type="number" value="249900">
+        <div class="hint">249900 = &#8377;2,499.00. Above 10,000,000 the issuer declines with 51.</div>
+
+        <div class="row">
+          <div>
+            <label>Currency</label>
+            <input id="currency" value="INR">
+          </div>
+          <div>
+            <label>Country</label>
+            <select id="countryCode">
+              <option value="IN">IN &mdash; India</option>
+              <option value="US">US &mdash; United States</option>
+              <option value="GB">GB &mdash; United Kingdom</option>
+              <option value="SG">SG &mdash; Singapore</option>
+              <option value="BR">BR &mdash; Brazil</option>
+              <option value="">(none)</option>
+            </select>
+          </div>
+        </div>
+
+        <label>Merchant</label>
+        <input id="merchantId" value="mrc_acme_travel">
+
+        <label>Idempotency-Key</label>
+        <div class="row">
+          <input id="idempotencyKey">
+          <button style="flex:0 0 auto" onclick="newKey()">new</button>
+        </div>
+
+        <div class="btns">
+          <button class="primary" onclick="send('new')">Authorize &nbsp;&rarr;&nbsp; expect 201</button>
+          <button onclick="send('replay')">Retry same key, same body &nbsp;&rarr;&nbsp; expect 200</button>
+          <button onclick="send('conflict')">Same key, different amount &nbsp;&rarr;&nbsp; expect 409</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Scripted scenarios</h2>
+      <div class="body">
+        <div class="btns" style="margin-top:0">
+          <button onclick="scenarioVelocity()">Trip the velocity rule (6 rapid authorizations)</button>
+          <button onclick="scenarioTravel()">Impossible travel (IN then US)</button>
+          <button onclick="scenarioConcurrent()">50 concurrent calls, one key</button>
+          <button onclick="scenarioIssuer()">Amount over the issuer ceiling</button>
+        </div>
+        <div class="hint" style="margin-top:9px">Each runs against the live service. Watch the panels on the right change.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ RIGHT: what happened ============ -->
+  <div>
+    <div class="panel">
+      <h2>What just happened</h2>
+      <div class="body">
+        <div id="explain" class="explain"><b>Nothing yet</b>Send a request and this explains the response, the status code, and which part of the system decided it.</div>
+        <div class="cols">
+          <div>
+            <div class="hint" style="margin:0 0 5px">REQUEST</div>
+            <pre id="reqBox">—</pre>
+          </div>
+          <div>
+            <div class="hint" style="margin:0 0 5px">RESPONSE <span id="timing" class="muted"></span></div>
+            <pre id="resBox">—</pre>
+          </div>
+        </div>
+        <div class="hint" style="margin-top:10px">Equivalent curl (paste into your terminal):</div>
+        <pre id="curlBox" style="margin-top:4px">—</pre>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Fraud rules &mdash; what the engine sees for this card</h2>
+      <div class="body" id="velocityBox">
+        <span class="muted">Loading…</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Backend state</h2>
+      <div class="body">
+        <div class="stats" id="stats"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="tabs">
+        <button id="tab-auth" class="active" onclick="showTab('auth')">Authorizations</button>
+        <button id="tab-outbox" onclick="showTab('outbox')">Outbox &rarr; Kafka</button>
+      </div>
+      <div class="body">
+        <div id="pane-auth" class="scroll"></div>
+        <div id="pane-outbox" class="scroll" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : 'k-' + Date.now() + '-' + Math.random().toString(16).slice(2));
+
+let lastBody = null;
+
+function newKey() { $('idempotencyKey').value = 'demo-' + uuid().slice(0, 18); }
+function newCard() { $('cardToken').value = 'tok_' + Math.random().toString().slice(2, 18); }
+newKey();
+
+function formBody() {
+  const country = $('countryCode').value;
+  const body = {
+    cardToken: $('cardToken').value,
+    amountMinor: Number($('amountMinor').value),
+    currency: $('currency').value,
+    merchantId: $('merchantId').value,
+  };
+  if (country) body.countryCode = country;
+  return body;
+}
+
+// Every status this API can return, and which component produced it. The point of
+// the console is that a status code is never a mystery.
+const MEANING = {
+  201: ['ok', 'Created — this call did the work',
+        'The Idempotency-Key was new. IdempotencyLedger claimed it with a single INSERT ... ON CONFLICT, AuthorizationProcessor ran the rules and wrote the authorization and its outbox event in one transaction. Note the status inside the body: a DECLINED authorization is still a 201, because the request succeeded and a decision was recorded.'],
+  200: ['ok', 'Replayed — you are seeing a stored response',
+        'This key had already completed. Nothing ran: the response body came straight out of the idempotency_key table, JSONB column. The authorizationId is identical to the first call, so the card was not charged twice. Check the authorization count below — it did not move.'],
+  409: ['bad', 'Conflict — the key was reused unsafely',
+        'Either the same key arrived with a different request body (REQUEST_MISMATCH: guessing which response you wanted is never safe), or another call is holding the key right now (CONCURRENT_REQUEST, which is retryable). CanonicalRequestHasher decides this by comparing the SHA-256 of the sorted request body.'],
+  400: ['warn', 'Bad request — it never reached the service logic',
+        'Bean Validation or the missing Idempotency-Key check rejected this at the controller boundary. GlobalExceptionHandler turned it into RFC 7807 problem+json with a machine-readable type URI.'],
+  404: ['warn', 'Not found', 'No handler is mapped to this path, or no authorization exists with that id.'],
+  405: ['warn', 'Method not allowed', 'The path exists but not for this verb. The Allow header lists what does work.'],
+  415: ['warn', 'Unsupported media type', 'This endpoint consumes application/json.'],
+  500: ['bad', 'Internal error', 'Something genuinely unexpected. Check: docker compose logs app']
+};
+
+function explain(status, extra) {
+  const m = MEANING[status] || ['', 'HTTP ' + status, ''];
+  $('explain').className = 'explain ' + m[0];
+  $('explain').innerHTML = '<b>' + status + ' &middot; ' + m[1] + '</b>' + m[2] + (extra ? '<br><br>' + extra : '');
+}
+
+async function send(mode) {
+  let body = formBody();
+  let key = $('idempotencyKey').value;
+
+  if (mode === 'replay') {
+    if (!lastBody) { explain(0, 'Send a request first, then retry it.'); return; }
+    body = lastBody;
+  }
+  if (mode === 'conflict') {
+    if (!lastBody) { explain(0, 'Send a request first, then try reusing its key.'); return; }
+    body = { ...lastBody, amountMinor: lastBody.amountMinor + 100 };
+  }
+
+  const payload = JSON.stringify(body, null, 2);
+  $('reqBox').textContent = 'POST /v1/authorizations\nIdempotency-Key: ' + key + '\nContent-Type: application/json\n\n' + payload;
+  $('curlBox').textContent =
+    "curl -i -X POST http://localhost:8080/v1/authorizations \\\n" +
+    "  -H 'Content-Type: application/json' \\\n" +
+    "  -H 'Idempotency-Key: " + key + "' \\\n" +
+    "  -d '" + JSON.stringify(body) + "'";
+
+  const t0 = performance.now();
+  let res, text;
+  try {
+    res = await fetch('/v1/authorizations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
+      body: JSON.stringify(body)
+    });
+    text = await res.text();
+  } catch (e) {
+    $('resBox').textContent = 'network error: ' + e;
+    return;
+  }
+  const ms = (performance.now() - t0).toFixed(0);
+
+  $('timing').textContent = '· ' + ms + ' ms';
+  let pretty = text;
+  try { pretty = JSON.stringify(JSON.parse(text), null, 2); } catch (_) {}
+  $('resBox').textContent = 'HTTP ' + res.status + '\n\n' + pretty;
+
+  let extra = '';
+  try {
+    const j = JSON.parse(text);
+    if (j.status === 'DECLINED') {
+      extra = j.responseCode === '05'
+        ? '<b style="display:inline">Declined 05 (do not honour)</b> — a velocity rule returned DECLINE. See the fraud panel below for which one.'
+        : '<b style="display:inline">Declined 51 (insufficient funds)</b> — above the configured issuer ceiling.';
+    }
+  } catch (_) {}
+  explain(res.status, extra);
+
+  if (mode === 'new' && res.status === 201) lastBody = body;
+  refresh();
+}
+
+async function refresh() {
+  const card = $('cardToken').value;
+  const amount = Number($('amountMinor').value) || 1000;
+  const country = $('countryCode').value;
+
+  const [summary, auths, outbox, velocity] = await Promise.all([
+    fetch('/v1/console/summary').then(r => r.json()).catch(() => null),
+    fetch('/v1/console/authorizations?limit=15').then(r => r.json()).catch(() => []),
+    fetch('/v1/console/outbox?limit=15').then(r => r.json()).catch(() => []),
+    fetch('/v1/console/velocity?cardToken=' + encodeURIComponent(card) +
+          '&amountMinor=' + amount + (country ? '&countryCode=' + country : ''))
+      .then(r => r.json()).catch(() => null)
+  ]);
+
+  if (summary) renderStats(summary);
+  renderAuths(auths);
+  renderOutbox(outbox);
+  if (velocity) renderVelocity(velocity);
+}
+
+function renderStats(s) {
+  const cell = (k, v, cls) =>
+    '<div class="stat"><div class="k">' + k + '</div><div class="v"' +
+    (cls ? ' style="color:var(--' + cls + ')"' : '') + '>' + v + '</div></div>';
+  $('stats').innerHTML =
+    cell('authorizations', s.authorizations) +
+    cell('approved', s.approved, 'ok') +
+    cell('declined', s.declined, 'bad') +
+    cell('idempotency keys', s.idempotencyKeys) +
+    cell('replays served', Math.round(s.idempotencyReplays), 'accent') +
+    cell('409 conflicts', Math.round(s.idempotencyConflicts), 'warn') +
+    cell('outbox rows', s.outboxTotal) +
+    cell('unpublished', s.outboxUnpublished, s.outboxUnpublished > 0 ? 'warn' : 'ok') +
+    cell('events consumed', Math.round(s.eventsProcessed)) +
+    cell('dupes dropped', Math.round(s.eventsDuplicate)) +
+    cell('velocity declines', Math.round(s.velocityDeclines), 'bad') +
+    cell('redis fail-open', Math.round(s.velocityFailOpen), s.velocityFailOpen > 0 ? 'warn' : 'ok');
+}
+
+function statusBadge(s) {
+  const c = s === 'APPROVED' ? 'b-ok' : s === 'DECLINED' ? 'b-bad'
+          : s === 'CAPTURED' ? 'b-info' : 'b-warn';
+  return '<span class="badge ' + c + '">' + s + '</span>';
+}
+
+function renderAuths(rows) {
+  if (!rows.length) { $('pane-auth').innerHTML = '<span class="muted">No authorizations yet.</span>'; return; }
+  $('pane-auth').innerHTML =
+    '<table><thead><tr><th>time</th><th>card</th><th>amount</th><th>status</th><th>code</th><th>id</th></tr></thead><tbody>' +
+    rows.map(r =>
+      '<tr><td class="muted">' + new Date(r.createdAt).toLocaleTimeString() + '</td>' +
+      '<td>' + r.cardToken.slice(0, 14) + '…</td>' +
+      '<td>' + r.amountMinor.toLocaleString() + ' ' + r.currency + '</td>' +
+      '<td>' + statusBadge(r.status) + '</td>' +
+      '<td>' + r.responseCode + '</td>' +
+      '<td class="muted">' + r.id.slice(0, 8) + '</td></tr>').join('') +
+    '</tbody></table>';
+}
+
+function renderOutbox(rows) {
+  if (!rows.length) { $('pane-outbox').innerHTML = '<span class="muted">Outbox is empty.</span>'; return; }
+  $('pane-outbox').innerHTML =
+    '<table><thead><tr><th>id</th><th>event</th><th>state</th><th>published</th><th>aggregate</th></tr></thead><tbody>' +
+    rows.map(r =>
+      '<tr><td>' + r.id + '</td><td>' + r.eventType + '</td>' +
+      '<td>' + (r.published ? '<span class="badge b-ok">published</span>'
+                            : '<span class="badge b-warn">pending</span>') + '</td>' +
+      '<td class="muted">' + (r.publishedAt ? new Date(r.publishedAt).toLocaleTimeString() : '—') + '</td>' +
+      '<td class="muted">' + r.aggregateId.slice(0, 8) + '</td></tr>').join('') +
+    '</tbody></table>';
+}
+
+function renderVelocity(v) {
+  const verdictBadge = v.verdict === 'ALLOW' ? '<span class="badge b-ok">ALLOW</span>'
+                     : v.verdict === 'REVIEW' ? '<span class="badge b-warn">REVIEW</span>'
+                     : '<span class="badge b-bad">DECLINE</span>';
+  const rules = Object.entries(v.perRuleVerdict || {}).map(([name, verdict]) => {
+    const c = verdict === 'ALLOW' ? 'b-ok' : verdict === 'REVIEW' ? 'b-warn' : 'b-bad';
+    return '<div><span>' + name + '</span><span class="badge ' + c + '">' + verdict + '</span></div>';
+  }).join('') || '<div class="muted">no rules ran</div>';
+
+  const geo = (v.recentGeoEvents || []).map(g =>
+    g.countryCode + ' @ ' + new Date(g.at).toLocaleTimeString()).join(', ') || '—';
+
+  $('velocityBox').innerHTML =
+    '<div class="explain" style="margin-bottom:12px">' +
+      '<b>Dry run &mdash; verdict for this card and amount: ' + verdictBadge + '</b>' +
+      'Read-only. Rule evaluation has no side effects, so this shows what would happen without authorizing anything.' +
+      (v.degraded ? '<br><br><span style="color:var(--warn)">Degraded: Redis was unreachable, so the engine failed open and allowed the payment. That is deliberate.</span>' : '') +
+    '</div>' +
+    '<div class="cols">' +
+      '<div class="kv">' + rules + '</div>' +
+      '<div class="kv">' +
+        '<div><span>authorizations in 60s window</span><span>' + v.recentAuthorizationCount + '</span></div>' +
+        '<div><span>rolling average</span><span>' + v.rollingAverageMinor.toLocaleString() + '</span></div>' +
+        '<div><span>this amount</span><span>' + v.amountMinorTested.toLocaleString() + '</span></div>' +
+        '<div><span>amount history</span><span>' + ((v.recentAmountsMinor || []).slice(0, 6).join(', ') || '—') + '</span></div>' +
+        '<div><span>recent countries</span><span>' + geo + '</span></div>' +
+      '</div>' +
+    '</div>';
+}
+
+function showTab(which) {
+  $('pane-auth').style.display = which === 'auth' ? '' : 'none';
+  $('pane-outbox').style.display = which === 'outbox' ? '' : 'none';
+  $('tab-auth').className = which === 'auth' ? 'active' : '';
+  $('tab-outbox').className = which === 'outbox' ? 'active' : '';
+}
+
+// ---- scripted scenarios ----
+
+async function post(key, body) {
+  const res = await fetch('/v1/authorizations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key },
+    body: JSON.stringify(body)
+  });
+  return { status: res.status, body: await res.json().catch(() => ({})) };
+}
+
+async function scenarioVelocity() {
+  newCard();
+  const body = formBody();
+  const results = [];
+  for (let i = 1; i <= 6; i++) {
+    const r = await post('demo-' + uuid().slice(0, 18), body);
+    results.push('#' + i + ' → ' + r.status + ' ' + (r.body.status || '') + ' ' + (r.body.responseCode || ''));
+  }
+  $('resBox').textContent = results.join('\n');
+  explain(201, 'The first five were approved. The sixth tripped <b style="display:inline">card-velocity</b> ' +
+    '(max 5 per 60s) and came back DECLINED with 05. The count lives in a Redis sorted set scored by epoch ' +
+    'millis, so the window slides continuously — an attacker cannot straddle a fixed bucket boundary.');
+  refresh();
+}
+
+async function scenarioTravel() {
+  newCard();
+  const base = formBody();
+  const a = await post('demo-' + uuid().slice(0, 18), { ...base, countryCode: 'IN' });
+  const b = await post('demo-' + uuid().slice(0, 18), { ...base, countryCode: 'US' });
+  $('resBox').textContent =
+    'IN → ' + a.status + ' ' + a.body.status + ' ' + a.body.responseCode + '\n' +
+    'US → ' + b.status + ' ' + b.body.status + ' ' + b.body.responseCode;
+  $('countryCode').value = 'US';
+  explain(201, 'Same card, India then the United States, seconds apart. <b style="display:inline">impossible-travel</b> ' +
+    'declined the second one: roughly 13,000 km between country centroids, well inside the 10 minute window.');
+  refresh();
+}
+
+async function scenarioConcurrent() {
+  newCard();
+  const key = 'demo-concurrent-' + uuid().slice(0, 12);
+  const body = formBody();
+  const before = await fetch('/v1/console/summary').then(r => r.json());
+
+  // All 50 dispatched without awaiting, so they hit the service together.
+  const results = await Promise.all(Array.from({ length: 50 }, () => post(key, body)));
+
+  const after = await fetch('/v1/console/summary').then(r => r.json());
+  const tally = {};
+  results.forEach(r => tally[r.status] = (tally[r.status] || 0) + 1);
+  const ids = new Set(results.map(r => r.body.authorizationId).filter(Boolean));
+
+  $('resBox').textContent =
+    'status tally: ' + JSON.stringify(tally, null, 2) +
+    '\n\ndistinct authorizationIds returned: ' + ids.size +
+    '\nauthorization rows created: ' + (after.authorizations - before.authorizations);
+  explain(200, '50 requests, one Idempotency-Key, fired together. Exactly <b style="display:inline">one</b> ' +
+    'authorization row was created. One caller got 201; the rest got 200 (the stored response) or 409 ' +
+    '(the key was still in flight). The winner is chosen by a single INSERT ... ON CONFLICT — Postgres&rsquo; ' +
+    'primary key index does the arbitration, not application code.');
+  refresh();
+}
+
+async function scenarioIssuer() {
+  newCard();
+  const r = await post('demo-' + uuid().slice(0, 18), { ...formBody(), amountMinor: 99999999 });
+  $('resBox').textContent = 'HTTP ' + r.status + '\n\n' + JSON.stringify(r.body, null, 2);
+  explain(r.status, 'Above <code>payauth.issuer.decline-above-minor</code>, so the simulated issuer answered ' +
+    '<b style="display:inline">51 (insufficient funds)</b>. The fraud rules allowed it; this decline came later in the chain.');
+  refresh();
+}
+
+async function health() {
+  try {
+    const h = await fetch('/actuator/health').then(r => r.json());
+    const up = h.status === 'UP';
+    const parts = Object.entries(h.components || {})
+      .filter(([k]) => ['db', 'redis'].includes(k))
+      .map(([k, v]) => k + ':' + v.status).join('  ');
+    $('health').innerHTML = '<span class="dot" style="background:' + (up ? 'var(--ok)' : 'var(--bad)') + '"></span>' +
+      h.status + '  ' + parts;
+  } catch (e) {
+    $('health').innerHTML = '<span class="dot" style="background:var(--bad)"></span>unreachable';
+  }
+}
+
+['cardToken', 'amountMinor', 'countryCode'].forEach(id => $(id).addEventListener('change', refresh));
+health(); refresh();
+setInterval(() => { health(); refresh(); }, 4000);
+</script>
+</body>
+</html>

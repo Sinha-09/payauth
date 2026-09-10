@@ -36,6 +36,26 @@ That brings up PostgreSQL, Redis, Kafka (KRaft, no ZooKeeper) and the service, r
 curl -s http://localhost:8080/actuator/health
 ```
 
+### The console
+
+Open **<http://localhost:8080>**. There is a small read-only UI there that makes the
+normally-invisible parts of the system visible while you click through it: the raw
+HTTP exchange with an explanation of every status code, what the fraud rules saw
+for the card in the form, the outbox backlog, and live counters.
+
+It has one-click scenarios for the four behaviours worth demonstrating — tripping
+the velocity rule, impossible travel, an amount over the issuer ceiling, and **50
+concurrent requests on a single Idempotency-Key**, which reports the status tally
+and the number of authorization rows actually created.
+
+The console is read-only, has no authentication, and exposes raw authorization rows
+and per-card velocity state. It is for demonstrating and explaining the system.
+Turn it off anywhere real:
+
+```bash
+CONSOLE_ENABLED=false docker compose up -d
+```
+
 ### Idempotency, with real output
 
 First call — `201`, and the authorization is created:
@@ -261,7 +281,7 @@ The replay path being roughly 2.5× faster than the create path is the shape you
 make test      # or: ./mvnw verify
 ```
 
-61 tests. Requires Docker and a JDK 21.
+76 tests. Requires Docker and a JDK 21.
 
 Integration tests use Testcontainers with real PostgreSQL, Redis and Kafka rather than mocks, because the behaviour being tested — `ON CONFLICT` semantics, transaction visibility across concurrent connections, `FOR UPDATE SKIP LOCKED`, optimistic locking — is behaviour of the database. A mocked repository would only assert that the code's assumptions are internally consistent, which is exactly the thing worth doubting.
 
@@ -280,6 +300,7 @@ Worth reading for how the hard parts are pinned down:
 ```
 src/main/java/com/shivamsinha/payauth/
 ├── api/          controllers, DTOs, RFC 7807 exception handling
+├── console/      read-only endpoints behind the demo UI (disable in production)
 ├── config/       @ConfigurationProperties, Kafka topic and template, Clock
 ├── domain/       JPA entities and enums
 ├── repository/   Spring Data repositories, including the native ON CONFLICT
@@ -311,6 +332,7 @@ Everything below has a working default; the compose file only overrides connecti
 | `payauth.velocity.rules-file` | `classpath:rules.yml` | Point at a `file:` location for hot reload |
 | `payauth.velocity.refresh-interval` | `10s` | How often the rules file is re-read |
 | `payauth.issuer.decline-above-minor` | `10000000` | Stand-in issuer ceiling; above it, ISO 8583 `51` |
+| `payauth.console.enabled` | `true` | The demo UI and its read endpoints. Set `false` in production. |
 
 `rules.yml` is re-read on that interval and swapped as a single reference, so an evaluation in flight sees the whole old configuration or the whole new one, never a half-applied mixture. A malformed file is logged and discarded and the last good configuration stays in force — operators tune these thresholds under pressure, and a YAML typo must not be able to change how payments are screened.
 

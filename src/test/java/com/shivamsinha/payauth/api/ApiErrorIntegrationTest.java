@@ -24,9 +24,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ApiErrorIntegrationTest extends AbstractIntegrationTest {
 
     @Test
+    @DisplayName("The root path serves the demo console")
+    void rootServesTheConsole() {
+        ResponseEntity<String> response =
+                restTemplate.exchange(url("/"), HttpMethod.GET, null, String.class);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).contains("payauth console");
+    }
+
+    @Test
     @DisplayName("An unmapped path is 404, not 500")
     void unmappedPathIsNotFound() {
-        for (String path : new String[]{"/", "/nope", "/favicon.ico", "/v1", "/v1/authorization"}) {
+        // "/" is deliberately absent: it serves the console. Everything else that is
+        // not mapped must be a 404 rather than falling through to the catch-all.
+        for (String path : new String[]{"/nope", "/favicon.ico", "/v1", "/v1/authorization"}) {
             ResponseEntity<String> response =
                     restTemplate.exchange(url(path), HttpMethod.GET, null, String.class);
 
